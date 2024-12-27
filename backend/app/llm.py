@@ -2,9 +2,13 @@ from typing import List
 import openai
 import json
 import os
+import logging
+import asyncio
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
 def load_prompt():
     try:
@@ -21,22 +25,44 @@ def load_prompt():
 
 EXTRACTION_PROMPT = load_prompt()
 
-async def extract_key_points(content: str) -> List[str]:
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10)
+)
+async def _call_openai_api(content: str) -> dict:
+    """Call OpenAI API with retry logic and timeout"""
     try:
-        response = await openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": EXTRACTION_PROMPT},
-                {"role": "user", "content": content}
-            ],
-            temperature=0,
-            response_format={"type": "json_object"}
-        )
-        
-        # Parse the response and extract the list of key points
-        result = json.loads(response.choices[0].message.content)
-        return result if isinstance(result, list) else []
-    
+        # Set timeout for the API call
+        async with asyncio.timeout(30):
+            response = await openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": EXTRACTION_PROMPT},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0,
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
+    except asyncio.TimeoutError:
+        logging.error("OpenAI API call timed out")
+        raise TimeoutError("API request timed out")
     except Exception as e:
-        print(f"Error in OpenAI extraction: {str(e)}")
-        raise Exception("Failed to extract key points")
+        logging.error(f"OpenAI API call failed: {str(e)}")
+        raise
+
+async def extract_key_points(content: str) -> List[str]:
+    """Extract key points from content with error handling"""
+    try:
+        result = await _call_openai_api(content)
+        if not isinstance(result, list):
+            logging.warning(f"Unexpected response format: {result}")
+            return []
+        return result
+    
+    except TimeoutError:
+        logging.error("Extraction timed out")
+        raise Exception("要点抽出がタイムアウトしました")
+    except Exception as e:
+        logging.error(f"Error in key points extraction: {str(e)}")
+        raise Exception("要点抽出に失敗しました")
