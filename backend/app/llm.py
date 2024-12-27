@@ -40,10 +40,24 @@ async def _call_openai_api(content: str) -> dict:
                     {"role": "system", "content": EXTRACTION_PROMPT},
                     {"role": "user", "content": content}
                 ],
-                temperature=0,
-                response_format={"type": "json_object"}
+                temperature=0
             )
-            return json.loads(response.choices[0].message.content)
+            try:
+                content = response.choices[0].message.content
+                # Try to parse as JSON list, if fails, split by newlines
+                try:
+                    result = json.loads(content)
+                    if isinstance(result, list):
+                        return result
+                    elif isinstance(result, dict) and "points" in result:
+                        return result["points"]
+                except json.JSONDecodeError:
+                    # Fallback: split by newlines and clean up
+                    points = [line.strip() for line in content.split("\n") if line.strip()]
+                    return points
+            except Exception as e:
+                logging.error(f"Failed to parse OpenAI response: {str(e)}")
+                return []
     except asyncio.TimeoutError:
         logging.error("OpenAI API call timed out")
         raise TimeoutError("API request timed out")

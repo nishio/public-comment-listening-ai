@@ -36,7 +36,7 @@ async def create_comment(comment: CommentCreate):
         raise HTTPException(status_code=400, detail="コメント内容は必須です")
     
     # LLMで要点を抽出
-    key_points = extract_key_points(comment.content)
+    key_points = await extract_key_points(comment.content)
     
     # コメントを保存
     new_comment = Comment(
