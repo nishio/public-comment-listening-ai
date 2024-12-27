@@ -1,24 +1,16 @@
-FROM python:3.12-slim as builder
-
-WORKDIR /app
-
-RUN pip install poetry
-
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.in-project true
-RUN poetry install --no-dev
-
-COPY . .
-
 FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY --from=builder /app /app
-COPY --from=builder /app/.venv /app/.venv
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
 ENV PYTHONPATH="/app"
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
