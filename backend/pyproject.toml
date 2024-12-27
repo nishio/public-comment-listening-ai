@@ -11,6 +11,8 @@ fastapi = {extras = ["standard"], version = "^0.115.6"}
 psycopg = {extras = ["binary"], version = "^3.2.3"}
 openai = "^1.58.1"
 python-dotenv = "^1.0.1"
+tenacity = "^8.2.3"
+pydantic = "^2.5.2"
 
 
 [build-system]
